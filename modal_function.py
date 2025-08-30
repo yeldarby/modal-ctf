@@ -28,17 +28,6 @@ def run_untrusted_code(code: str) -> dict:
     sys.stdout = output
     
     try:
-        # Show execution context to verify we're running in Modal container
-        import pwd
-        username = pwd.getpwuid(os.getuid()).pw_name
-        print(f"Executing in container as user: {username} (uid: {os.getuid()})")
-        
-        # Create a restricted execution environment
-        exec_globals = {
-            "__builtins__": __builtins__,
-            "__name__": "__main__",
-        }
-        
         # Handle the code execution
         code = code.strip()
         if not code:
@@ -48,7 +37,7 @@ def run_untrusted_code(code: str) -> dict:
             try:
                 # Try to compile as 'exec' mode (statements)
                 compiled = compile(code, '<string>', 'exec')
-                exec(compiled, exec_globals)
+                exec(compiled)
                 
                 # If the last line looks like an expression, try to evaluate it
                 lines = code.split('\n')
@@ -58,14 +47,14 @@ def run_untrusted_code(code: str) -> dict:
                         ['import ', 'from ', 'def ', 'class ', 'if ', 'for ', 'while ', 'with ', 'try:', 'except']):
                         try:
                             # Try to evaluate the last line as an expression
-                            result = eval(last_line, exec_globals)
+                            result = eval(last_line)
                         except:
                             # Last line wasn't an expression, that's fine
                             pass
             except SyntaxError:
                 # Maybe it's a single expression?
                 try:
-                    result = eval(code, exec_globals)
+                    result = eval(code)
                 except:
                     # Re-raise the original error
                     raise

@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from pathlib import Path
 import uvicorn
+import sys
 
 # Set the FLAG environment variable for the CTF
 if "FLAG" not in os.environ:
@@ -29,7 +30,13 @@ async def root():
         content = html_path.read_text()
         # Replace placeholder with actual URL
         port = os.environ.get("PORT", "80")
-        base_url = f"http://localhost:{port}" if port != "80" else "http://localhost"
+        # In Docker, we're always on the internal port, external mapping handles the rest
+        if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER"):
+            # Running in Docker
+            base_url = "http://localhost"
+        else:
+            # Running directly
+            base_url = f"http://localhost:{port}" if port != "80" else "http://localhost"
         content = content.replace("[YOUR_URL]", base_url)
         return content
     return "<h1>Error: public/index.html not found</h1>"
@@ -63,12 +70,7 @@ async def execute_code(request: Request):
             "success": True,
             "result": result.get("result"),
             "output": result.get("output"),
-            "error": result.get("error"),
-            "host_info": {
-                "hostname": os.uname().nodename,
-                "user": os.environ.get("USER", "unknown"),
-                "flag_set": "FLAG" in os.environ
-            }
+            "error": result.get("error")
         }
         
         # Return pretty-printed JSON
@@ -78,10 +80,11 @@ async def execute_code(request: Request):
     except Exception as e:
         response_data = {
             "success": False,
-            "error": f"Failed to execute code: {str(e)}"
+            "error": f"Failed to execute code: {str(e)}",
+            "details": str(type(e).__name__)
         }
         pretty_json = json.dumps(response_data, indent=2)
-        return Response(content=pretty_json, media_type="application/json")
+        return Response(content=pretty_json, media_type="application/json", status_code=500)
 
 @app.get("/health")
 async def health():
@@ -89,11 +92,16 @@ async def health():
     return {
         "status": "healthy",
         "flag_configured": "FLAG" in os.environ,
-        "modal_configured": True
+        "modal_configured": bool(os.environ.get("MODAL_TOKEN_ID")),
+        "container": os.path.exists("/.dockerenv") or bool(os.environ.get("DOCKER_CONTAINER")),
+        "hostname": os.uname().nodename
     }
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "80"))
+    
+    # Detect if running in Docker
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
     
     print("=" * 60)
     print("Modal CTF Challenge - Local Server")
@@ -101,14 +109,19 @@ if __name__ == "__main__":
     print(f"FLAG is set to: {os.environ.get('FLAG', 'NOT SET')}")
     print(f"Running as user: {os.environ.get('USER', 'unknown')}")
     print(f"Hostname: {os.uname().nodename}")
+    print(f"Container: {'Yes (Docker)' if in_docker else 'No (Direct)'}")
+    print(f"Python version: {sys.version}")
     print()
     print(f"Starting server on http://0.0.0.0:{port}")
     print("=" * 60)
     
-    # Note: Port 80 requires sudo on most systems
-    if port < 1024 and os.geteuid() != 0:
+    # Note: Port 80 requires sudo on most systems when not in Docker
+    if port < 1024 and os.geteuid() != 0 and not in_docker:
         print("\n⚠️  WARNING: Port 80 requires root privileges!")
         print("   Run with: sudo python3 server.py")
         print("   Or set PORT=8000 for non-privileged port")
     
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # Flush output for Docker logs
+    sys.stdout.flush()
+    
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

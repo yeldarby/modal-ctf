@@ -14,12 +14,16 @@ if ! python3 -c "import modal" 2>/dev/null; then
     exit 1
 fi
 
-# Check if authenticated with Modal
-if ! python3 -m modal token identity 2>/dev/null; then
+# Check if authenticated with Modal by trying to list apps
+# This will fail if not authenticated
+if ! python3 -m modal app list &>/dev/null; then
     echo "ERROR: Not authenticated with Modal!"
     echo "Run: python3 -m modal setup"
     exit 1
 fi
+
+echo "✓ Modal authentication verified"
+echo
 
 # Deploy Modal function
 echo "Deploying Modal function to the cloud..."
@@ -30,4 +34,6 @@ echo "✅ Modal function deployed successfully!"
 echo
 echo "Next steps:"
 echo "1. Set your FLAG: export FLAG='CTF{your_flag_here}'"
-echo "2. Start the server: ./start_server.sh"
+echo "2. Start the server: ./start_server.sh (for local testing)"
+echo "   OR"
+echo "3. Use Docker: ./docker_start.sh (for production deployment)"

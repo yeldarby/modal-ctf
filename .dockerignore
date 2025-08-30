@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+*.cover
+.hypothesis/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+README.md
+deploy_modal.sh
+start_server.sh
+docker_start.sh
+docker-compose.yml
+Dockerfile.backup
+*.log
+*.pid
+
+# Secrets and config
+.env
+.env.*
+*.pem
+*.key
