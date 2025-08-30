@@ -1,0 +1,5 @@
+modal
+fastapi
+pydantic
+uvicorn[standard]
+requests

