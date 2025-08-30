@@ -5,9 +5,10 @@ This server will be vulnerable to the pickle deserialization attack.
 """
 
 import os
+import json
 import modal
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse
 from pathlib import Path
 import uvicorn
 
@@ -58,7 +59,7 @@ async def execute_code(request: Request):
         # The vulnerability happens here when Modal pickles/unpickles the result
         result = modal_function.remote(code)
         
-        return JSONResponse({
+        response_data = {
             "success": True,
             "result": result.get("result"),
             "output": result.get("output"),
@@ -68,12 +69,19 @@ async def execute_code(request: Request):
                 "user": os.environ.get("USER", "unknown"),
                 "flag_set": "FLAG" in os.environ
             }
-        })
+        }
+        
+        # Return pretty-printed JSON
+        pretty_json = json.dumps(response_data, indent=2)
+        return Response(content=pretty_json, media_type="application/json")
+        
     except Exception as e:
-        return JSONResponse({
+        response_data = {
             "success": False,
             "error": f"Failed to execute code: {str(e)}"
-        })
+        }
+        pretty_json = json.dumps(response_data, indent=2)
+        return Response(content=pretty_json, media_type="application/json")
 
 @app.get("/health")
 async def health():

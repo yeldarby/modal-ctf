@@ -39,22 +39,36 @@ def run_untrusted_code(code: str) -> dict:
             "__name__": "__main__",
         }
         
-        # Execute the code and capture the last expression's value
-        # Split code into lines to handle both statements and expressions
-        lines = code.strip().split('\n')
-        if lines:
-            # Execute all lines except the last as statements
-            if len(lines) > 1:
-                exec('\n'.join(lines[:-1]), exec_globals)
-            
-            # Try to evaluate the last line as an expression
-            last_line = lines[-1].strip()
-            if last_line:
+        # Handle the code execution
+        code = code.strip()
+        if not code:
+            result = None
+        else:
+            # Try to compile the entire code block first
+            try:
+                # Try to compile as 'exec' mode (statements)
+                compiled = compile(code, '<string>', 'exec')
+                exec(compiled, exec_globals)
+                
+                # If the last line looks like an expression, try to evaluate it
+                lines = code.split('\n')
+                if lines:
+                    last_line = lines[-1].strip()
+                    if last_line and not any(last_line.startswith(kw) for kw in 
+                        ['import ', 'from ', 'def ', 'class ', 'if ', 'for ', 'while ', 'with ', 'try:', 'except']):
+                        try:
+                            # Try to evaluate the last line as an expression
+                            result = eval(last_line, exec_globals)
+                        except:
+                            # Last line wasn't an expression, that's fine
+                            pass
+            except SyntaxError:
+                # Maybe it's a single expression?
                 try:
-                    result = eval(last_line, exec_globals)
-                except SyntaxError:
-                    # If it's not an expression, execute it as a statement
-                    exec(last_line, exec_globals)
+                    result = eval(code, exec_globals)
+                except:
+                    # Re-raise the original error
+                    raise
                     
     except Exception as e:
         error = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
