@@ -130,8 +130,27 @@ OS_NAME=$(uname -s)
 SECURITY_OPTS=""
 
 if [ "$OS_NAME" = "Linux" ]; then
-    # Full security options for Linux
-    SECURITY_OPTS="--security-opt no-new-privileges --security-opt apparmor=docker-default --security-opt seccomp=default"
+    # Check if seccomp is available
+    if docker info 2>/dev/null | grep -q "seccomp"; then
+        # Try to use seccomp, but fall back if the profile isn't found
+        SECCOMP_OPT="--security-opt seccomp=unconfined"
+        # Try to use the default seccomp profile if available
+        if docker run --rm --security-opt seccomp=default alpine echo test &>/dev/null; then
+            SECCOMP_OPT="--security-opt seccomp=default"
+        fi
+    else
+        SECCOMP_OPT=""
+        echo -e "${YELLOW}Note: Seccomp not available on this system${NC}"
+    fi
+    
+    # Check for AppArmor
+    APPARMOR_OPT=""
+    if [ -f /sys/module/apparmor/parameters/enabled ] && [ "$(cat /sys/module/apparmor/parameters/enabled)" = "Y" ]; then
+        APPARMOR_OPT="--security-opt apparmor=docker-default"
+    fi
+    
+    # Combine security options
+    SECURITY_OPTS="--security-opt no-new-privileges ${SECCOMP_OPT} ${APPARMOR_OPT}"
 elif [ "$OS_NAME" = "Darwin" ]; then
     # macOS doesn't support all security options
     SECURITY_OPTS="--security-opt no-new-privileges"
@@ -140,6 +159,9 @@ fi
 
 # Run container with comprehensive security restrictions
 # Using --restart always for CTF resilience (will restart on crash or unhealthy state)
+echo -e "${GREEN}Starting Docker container...${NC}"
+echo -e "${BLUE}Security options: ${SECURITY_OPTS}${NC}"
+
 docker run \
     --name $CONTAINER_NAME \
     --detach \
@@ -166,6 +188,14 @@ docker run \
     --log-opt max-file=3 \
     $IMAGE_NAME || {
     echo -e "${RED}Failed to start container${NC}"
+    echo -e "${RED}Error details:${NC}"
+    docker logs $CONTAINER_NAME 2>&1 | tail -20
+    echo ""
+    echo -e "${YELLOW}Troubleshooting tips:${NC}"
+    echo "  1. Check if port $HOST_PORT is already in use: sudo lsof -i :$HOST_PORT"
+    echo "  2. Try running without security options: remove \$SECURITY_OPTS from docker run"
+    echo "  3. Check Docker daemon logs: sudo journalctl -u docker -n 50"
+    echo "  4. Verify Docker installation: docker run hello-world"
     exit 1
 }
 

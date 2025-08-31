@@ -30,7 +30,7 @@ RUN find / -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
 
 # Ensure Python packages are in PATH for non-root user
 ENV PATH="/home/ctfuser/.local/bin:${PATH}"
-ENV PYTHONPATH="/home/ctfuser/.local/lib/python3.11/site-packages:${PYTHONPATH:-}"
+ENV PYTHONPATH="/home/ctfuser/.local/lib/python3.11/site-packages:${PYTHONPATH}"
 
 # Set USER environment variable to match the actual user
 ENV USER=ctfuser
