@@ -9,6 +9,9 @@ Can run in two modes:
 import os
 import json
 import sys
+import hashlib
+import hmac
+import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -26,6 +29,10 @@ except ImportError:
 # Check if running in vulnerable mode
 VULNERABLE_MODE = os.environ.get("VULNERABLE", "false").lower() in ["true", "1", "yes"]
 
+# Logger configuration
+LOGGER_URL = os.environ.get("LOGGER_URL")
+LOGGER_SECRET = os.environ.get("LOGGER_SECRET", "default-secret-change-me")
+
 # Set the FLAG environment variable for the CTF
 if "FLAG" not in os.environ:
     print("⚠️  WARNING: FLAG environment variable not set!")
@@ -37,6 +44,42 @@ app = FastAPI(
     title="Modal CTF Challenge",
     description=f"Running in {'VULNERABLE' if VULNERABLE_MODE else 'SECURE'} mode"
 )
+
+async def log_to_sidecar(code: str, output: dict, client_ip: str, user_agent: str):
+    """Send log entry to the logger sidecar service"""
+    if not LOGGER_URL:
+        return  # Logger not configured
+    
+    try:
+        # Prepare data for HMAC
+        log_data = {
+            "code": code,
+            "output": output,
+            "client_ip": client_ip,
+            "user_agent": user_agent
+        }
+        
+        # Calculate HMAC signature
+        message = json.dumps(log_data, sort_keys=True)
+        signature = hmac.new(
+            LOGGER_SECRET.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Add signature to data
+        log_data["hmac_signature"] = signature
+        
+        # Send to logger service
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{LOGGER_URL}/log",
+                json=log_data,
+                timeout=2.0  # Short timeout to not block main service
+            )
+    except Exception as e:
+        # Silently fail - logging should not break main service
+        print(f"Logger error (non-critical): {e}", file=sys.stderr)
 
 # Serve static files from public directory
 @app.get("/", response_class=HTMLResponse)
@@ -64,10 +107,8 @@ async def root():
         # Update the description based on mode
         if not VULNERABLE_MODE:
             secure_note = """
-        <div class="section" style="background: #d4edda; border: 2px solid #c3e6cb; padding: 15px; border-radius: 5px;">
-            <h3>🛡️ Secure Mode Active</h3>
-            <p>The server is running with rfmodal's pickle firewall enabled. The standard pickle deserialization attacks shown below should NOT work.</p>
-            <p><strong>Your challenge:</strong> Find another way to exploit the system and capture the flag!</p>
+        <div style='background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 10px; margin: 20px 0; color: #155724;'>
+            <strong>🛡️ SECURE MODE:</strong> rfmodal's pickle firewall is active. Standard pickle attacks will be blocked.
         </div>
         """
             content = content.replace('<h1>🚩 Modal CTF Challenge - Capture the Flag! 🚩</h1>', 
@@ -87,10 +128,21 @@ async def execute_code(request: Request):
     - SECURE (default): Uses rfmodal's pickle firewall to block malicious deserialization
     - VULNERABLE: Disables firewall, allowing pickle RCE attacks for CTF purposes
     """
+    # Get client info for logging
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "")
+    
     try:
-        # Get raw body as Python code
-        code = await request.body()
-        code = code.decode('utf-8')
+        # Handle both raw text and JSON input
+        content_type = request.headers.get("content-type", "").lower()
+        
+        if "application/json" in content_type:
+            body = await request.json()
+            code = body.get("code", "")
+        else:
+            # Treat as raw text/plain
+            body_bytes = await request.body()
+            code = body_bytes.decode("utf-8")
         
         # Get the Modal function with appropriate firewall setting
         modal_function = modal.Function.from_name(
@@ -112,6 +164,9 @@ async def execute_code(request: Request):
             "mode": "vulnerable" if VULNERABLE_MODE else "secure"
         }
         
+        # Log the attempt
+        await log_to_sidecar(code, response_data, client_ip, user_agent)
+        
         # Return pretty-printed JSON
         pretty_json = json.dumps(response_data, indent=2)
         return Response(content=pretty_json, media_type="application/json")
@@ -132,6 +187,9 @@ async def execute_code(request: Request):
         if is_firewall_block and not VULNERABLE_MODE:
             response_data["hint"] = "The pickle firewall blocked your attack. This is expected in secure mode!"
         
+        # Log the attempt
+        await log_to_sidecar(code, response_data, client_ip, user_agent)
+        
         pretty_json = json.dumps(response_data, indent=2)
         return Response(content=pretty_json, media_type="application/json", status_code=500)
 
@@ -146,7 +204,8 @@ async def health():
         "modal_configured": bool(os.environ.get("MODAL_TOKEN_ID")),
         "container": os.path.exists("/.dockerenv") or bool(os.environ.get("DOCKER_CONTAINER")),
         "hostname": os.uname().nodename,
-        "rfmodal_version": getattr(modal, "__version__", "unknown")
+        "rfmodal_version": getattr(modal, "__version__", "unknown"),
+        "logger_configured": bool(LOGGER_URL)
     }
 
 @app.get("/mode")
@@ -175,6 +234,7 @@ if __name__ == "__main__":
     print(f"Hostname: {os.uname().nodename}")
     print(f"Container: {'Yes (Docker)' if in_docker else 'No (Direct)'}")
     print(f"Python version: {sys.version}")
+    print(f"Logger: {'Configured' if LOGGER_URL else 'Not configured'}")
     if base_url:
         print(f"Base URL: {base_url}")
     print()

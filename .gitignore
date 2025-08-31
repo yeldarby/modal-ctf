@@ -44,7 +44,11 @@ modal_meta.json
 # Environment variables
 .env
 .env.local
+.env.production
 
 # Test outputs
 *.log
 test_results/
+
+# Log output directory (for local testing)
+output/
