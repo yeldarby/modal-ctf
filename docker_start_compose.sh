@@ -131,32 +131,36 @@ echo -e "${BLUE}   Logger Secret: ${LOGGER_SECRET:0:8}...${NC}"
 echo -e "${BLUE}   Modal Token ID: ${MODAL_TOKEN_ID:0:10}...${NC}"
 echo -e "${BLUE}   Host Port: ${HOST_PORT}${NC}"
 
-# Create output directory with proper permissions if it doesn't exist
+# Ensure proper permissions on output directory
+# The logger container runs as uid/gid 1002
 OUTPUT_DIR="/home/yeldarb/output"
 if [ ! -d "$OUTPUT_DIR" ]; then
     echo -e "${GREEN}📁 Creating output directory: $OUTPUT_DIR${NC}"
     sudo mkdir -p "$OUTPUT_DIR"
-    # The logger container runs as uid/gid 1002, so it needs to own the directory
-    sudo chown 1002:1002 "$OUTPUT_DIR"
-    sudo chmod 750 "$OUTPUT_DIR"  # rwxr-x--- : owner (logger) can write, group can read/traverse
-else
-    echo -e "${BLUE}📁 Output directory exists: $OUTPUT_DIR${NC}"
-    # Fix permissions - logger needs to own the directory to write
-    sudo chown 1002:1002 "$OUTPUT_DIR"
-    sudo chmod 750 "$OUTPUT_DIR"
-    # Fix any existing files
-    sudo find "$OUTPUT_DIR" -type f -exec chown 1002:1002 {} \; 2>/dev/null || true
-    sudo find "$OUTPUT_DIR" -type f -exec chmod 640 {} \; 2>/dev/null || true
 fi
 
-# Add yeldarb to the logger group (gid 1002) if not already
-if ! id -nG yeldarb | grep -qw logger; then
-    echo -e "${GREEN}Adding yeldarb user to logger group (gid 1002) for log access${NC}"
-    # Create the logger group if it doesn't exist
-    sudo groupadd -g 1002 logger 2>/dev/null || true
-    sudo usermod -a -G logger yeldarb
-    echo -e "${YELLOW}Note: You may need to log out and back in for group membership to take effect${NC}"
-    echo -e "${YELLOW}Or run: newgrp logger${NC}"
+# Set ownership - logger container writes as 1002:1002
+echo -e "${GREEN}📁 Setting permissions on $OUTPUT_DIR${NC}"
+sudo chown 1002:1002 "$OUTPUT_DIR"
+sudo chmod 750 "$OUTPUT_DIR"  # rwxr-x--- : owner can write, group can read/traverse
+
+# Check if user already has access via gid 1002
+USER_GID=$(id -g yeldarb)
+USER_GROUPS=$(id -G yeldarb)
+
+if echo "$USER_GROUPS" | grep -qw "1002"; then
+    echo -e "${GREEN}✓ User yeldarb already has access via gid 1002${NC}"
+else
+    echo -e "${YELLOW}⚠ User yeldarb doesn't have gid 1002 access${NC}"
+    echo -e "${YELLOW}  Your groups: $(id yeldarb)${NC}"
+    echo -e "${YELLOW}  You may need to manually add yourself to gid 1002${NC}"
+fi
+
+# Fix any existing files
+if [ "$(ls -A $OUTPUT_DIR 2>/dev/null)" ]; then
+    echo -e "${BLUE}Fixing permissions on existing log files...${NC}"
+    sudo find "$OUTPUT_DIR" -type f -exec chown 1002:1002 {} \; 2>/dev/null || true
+    sudo find "$OUTPUT_DIR" -type f -exec chmod 640 {} \; 2>/dev/null || true
 fi
 
 # Determine which docker compose command to use
@@ -250,10 +254,10 @@ echo -e "${YELLOW}Note: Containers will auto-restart if they crash or become unh
 echo ""
 echo -e "${GREEN}📋 Security & Permissions:${NC}"
 echo -e "   Logs directory: $(ls -ld $OUTPUT_DIR | awk '{print $1" "$3":"$4}')"
-echo -e "   Directory: 750 (logger owns, group can read)"
+echo -e "   Directory: 750 (uid 1002 owns, gid 1002 can read)"
 echo -e "   Log files: 640 (read-only, NO EXECUTE)"
-echo -e "   ${GREEN}✓${NC} Logger container (uid 1002) owns directory for writing"
-echo -e "   ${GREEN}✓${NC} You're in logger group (gid 1002) for reading"
+echo -e "   ${GREEN}✓${NC} Logger container writes as uid/gid 1002"
+echo -e "   ${GREEN}✓${NC} Your access: $(id -gn yeldarb) (gid $(id -g yeldarb))"
 echo -e "   ${GREEN}✓${NC} No execute permissions on logged malicious code"
 echo -e "   ${GREEN}✓${NC} No world access to potentially dangerous logs"
 echo ""
