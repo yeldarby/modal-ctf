@@ -42,6 +42,13 @@ if [ -z "$FLAG" ]; then
     FLAG="CTF{default_flag_for_testing}"
 fi
 
+# Check if BASE_URL is set (for custom domains)
+if [ -n "$BASE_URL" ]; then
+    echo -e "${GREEN}Using custom BASE_URL: $BASE_URL${NC}"
+else
+    echo -e "${BLUE}No BASE_URL set, will use http://localhost${NC}"
+fi
+
 # Check for Modal credentials
 if [ -z "$MODAL_TOKEN_ID" ] || [ -z "$MODAL_TOKEN_SECRET" ]; then
     echo -e "${YELLOW}Modal credentials not found in environment, checking ~/.modal.toml...${NC}"
@@ -124,6 +131,9 @@ echo -e "${GREEN}   FLAG: ${FLAG}${NC}"
 echo -e "${GREEN}   Host Port: ${HOST_PORT}${NC}"
 echo -e "${GREEN}   Container Port: ${CONTAINER_PORT}${NC}"
 echo -e "${GREEN}   Modal Token ID: ${MODAL_TOKEN_ID:0:10}...${NC}"
+if [ -n "$BASE_URL" ]; then
+    echo -e "${GREEN}   Base URL: ${BASE_URL}${NC}"
+fi
 
 # Detect OS for platform-specific security options
 OS_NAME=$(uname -s)
@@ -162,15 +172,23 @@ fi
 echo -e "${GREEN}Starting Docker container...${NC}"
 echo -e "${BLUE}Security options: ${SECURITY_OPTS}${NC}"
 
+# Build environment variables for docker run
+ENV_OPTS="--env FLAG=\"$FLAG\" \
+    --env VULNERABLE=\"$VULNERABLE_ENV\" \
+    --env MODAL_TOKEN_ID=\"$MODAL_TOKEN_ID\" \
+    --env MODAL_TOKEN_SECRET=\"$MODAL_TOKEN_SECRET\""
+
+# Add BASE_URL if set
+if [ -n "$BASE_URL" ]; then
+    ENV_OPTS="$ENV_OPTS --env BASE_URL=\"$BASE_URL\""
+fi
+
 docker run \
     --name $CONTAINER_NAME \
     --detach \
     --restart always \
     --publish $HOST_PORT:$CONTAINER_PORT \
-    --env FLAG="$FLAG" \
-    --env VULNERABLE="$VULNERABLE_ENV" \
-    --env MODAL_TOKEN_ID="$MODAL_TOKEN_ID" \
-    --env MODAL_TOKEN_SECRET="$MODAL_TOKEN_SECRET" \
+    $ENV_OPTS \
     --read-only \
     --tmpfs /tmp:noexec,nosuid,nodev,size=10M \
     --tmpfs /run:noexec,nosuid,nodev,size=10M \
@@ -225,7 +243,11 @@ docker logs --tail 20 $CONTAINER_NAME
 
 echo ""
 echo -e "${MODE_COLOR}✨ Modal CTF Challenge is running in ${MODE} mode!${NC}"
-echo -e "${GREEN}   Access at: http://localhost:${HOST_PORT}${NC}"
+if [ -n "$BASE_URL" ]; then
+    echo -e "${GREEN}   Access at: ${BASE_URL}${NC}"
+else
+    echo -e "${GREEN}   Access at: http://localhost:${HOST_PORT}${NC}"
+fi
 echo ""
 
 if [ "$MODE" = "vulnerable" ]; then

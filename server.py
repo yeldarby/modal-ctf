@@ -44,15 +44,21 @@ async def root():
     html_path = Path("public/index.html")
     if html_path.exists():
         content = html_path.read_text()
+        
+        # Determine the base URL
+        base_url = os.environ.get("BASE_URL")
+        if not base_url:
+            # Auto-detect based on environment
+            port = os.environ.get("PORT", "80")
+            # In Docker, we're always on the internal port, external mapping handles the rest
+            if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER"):
+                # Running in Docker
+                base_url = "http://localhost"
+            else:
+                # Running directly
+                base_url = f"http://localhost:{port}" if port != "80" else "http://localhost"
+        
         # Replace placeholder with actual URL
-        port = os.environ.get("PORT", "80")
-        # In Docker, we're always on the internal port, external mapping handles the rest
-        if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER"):
-            # Running in Docker
-            base_url = "http://localhost"
-        else:
-            # Running directly
-            base_url = f"http://localhost:{port}" if port != "80" else "http://localhost"
         content = content.replace("[YOUR_URL]", base_url)
         
         # Update the description based on mode
@@ -154,6 +160,7 @@ async def mode():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "80"))
+    base_url = os.environ.get("BASE_URL")
     
     # Detect if running in Docker
     in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
@@ -168,6 +175,8 @@ if __name__ == "__main__":
     print(f"Hostname: {os.uname().nodename}")
     print(f"Container: {'Yes (Docker)' if in_docker else 'No (Direct)'}")
     print(f"Python version: {sys.version}")
+    if base_url:
+        print(f"Base URL: {base_url}")
     print()
     
     if VULNERABLE_MODE:
@@ -180,6 +189,8 @@ if __name__ == "__main__":
     
     print()
     print(f"Starting server on http://0.0.0.0:{port}")
+    if base_url:
+        print(f"Public access: {base_url}")
     print("=" * 60)
     
     # Note: Port 80 requires sudo on most systems when not in Docker
