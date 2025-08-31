@@ -94,22 +94,22 @@ async def log_entry(entry: LogEntry):
     try:
         # Create log directory if it doesn't exist
         log_dir = Path("/logs")
-        log_dir.mkdir(exist_ok=True, mode=0o770)  # rwx for user and group
+        log_dir.mkdir(exist_ok=True, mode=0o750)  # rwxr-x--- for directory traversal only
         
-        # Write metadata file
+        # Write metadata file - NO EXECUTE PERMISSIONS
         metadata_file = log_dir / f"{timestamp}-metadata.json"
         metadata_file.write_text(json.dumps(metadata, indent=2))
-        metadata_file.chmod(0o640)  # rw- for user, r-- for group, nothing for others
+        metadata_file.chmod(0o640)  # rw-r----- : NO EXECUTE
         
-        # Write input code
+        # Write input code - NO EXECUTE PERMISSIONS
         input_file = log_dir / f"{timestamp}-input.txt"
         input_file.write_text(entry.code)
-        input_file.chmod(0o640)  # rw- for user, r-- for group
+        input_file.chmod(0o640)  # rw-r----- : NO EXECUTE
         
-        # Write output
+        # Write output - NO EXECUTE PERMISSIONS
         output_file = log_dir / f"{timestamp}-output.json"
         output_file.write_text(json.dumps(entry.output, indent=2))
-        output_file.chmod(0o640)  # rw- for user, r-- for group
+        output_file.chmod(0o640)  # rw-r----- : NO EXECUTE
         
         print(f"Successfully logged entry at {timestamp} from {entry.client_ip}", file=sys.stderr)
         return {"status": "logged", "timestamp": timestamp}

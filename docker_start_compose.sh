@@ -139,15 +139,15 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     # Create a shared group for logger (gid 1002) and set proper permissions
     # The logger container runs as uid/gid 1002
     sudo chown yeldarb:1002 "$OUTPUT_DIR"
-    sudo chmod 770 "$OUTPUT_DIR"  # rwx for owner and group, nothing for others
+    sudo chmod 750 "$OUTPUT_DIR"  # rwxr-x--- : owner can traverse, group can read/traverse, no execute on files
     sudo chmod g+s "$OUTPUT_DIR"  # Set group sticky bit so new files inherit group
 else
     echo -e "${BLUE}📁 Output directory exists: $OUTPUT_DIR${NC}"
     # Fix permissions if needed - secure but accessible
     sudo chown yeldarb:1002 "$OUTPUT_DIR"
-    sudo chmod 770 "$OUTPUT_DIR"
+    sudo chmod 750 "$OUTPUT_DIR"  # Need execute to traverse directory, but files won't have execute
     sudo chmod g+s "$OUTPUT_DIR"
-    # Fix any existing files to be readable by group
+    # Fix any existing files to be readable by group, NO EXECUTE
     sudo find "$OUTPUT_DIR" -type f -exec chgrp 1002 {} \; 2>/dev/null || true
     sudo find "$OUTPUT_DIR" -type f -exec chmod 640 {} \; 2>/dev/null || true
 fi
@@ -252,9 +252,11 @@ echo -e "${YELLOW}Note: Containers will auto-restart if they crash or become unh
 
 # Instructions for fixing permissions if needed
 echo ""
-echo -e "${GREEN}📋 Permissions info:${NC}"
+echo -e "${GREEN}📋 Security & Permissions:${NC}"
 echo -e "   Logs directory: $(ls -ld $OUTPUT_DIR | awk '{print $1" "$3":"$4}')"
-echo -e "   Logger writes as gid 1002, you read as member of group 1002"
-echo -e "   Secure permissions: 770 on directory, 640 on files"
-echo -e "   No world access to potentially malicious code logs"
+echo -e "   Directory: 750 (traverse only, no file execution)"
+echo -e "   Log files: 640 (read-only, NO EXECUTE)"
+echo -e "   ${GREEN}✓${NC} No execute permissions on any logged malicious code"
+echo -e "   ${GREEN}✓${NC} Group-based access control (gid 1002)"
+echo -e "   ${GREEN}✓${NC} No world access to potentially dangerous logs"
 echo ""
