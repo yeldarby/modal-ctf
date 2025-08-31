@@ -136,31 +136,27 @@ OUTPUT_DIR="/home/yeldarb/output"
 if [ ! -d "$OUTPUT_DIR" ]; then
     echo -e "${GREEN}📁 Creating output directory: $OUTPUT_DIR${NC}"
     sudo mkdir -p "$OUTPUT_DIR"
-    # Create a shared group for logger (gid 1002) and set proper permissions
-    # The logger container runs as uid/gid 1002
-    sudo chown yeldarb:1002 "$OUTPUT_DIR"
-    sudo chmod 750 "$OUTPUT_DIR"  # rwxr-x--- : owner can traverse, group can read/traverse, no execute on files
-    sudo chmod g+s "$OUTPUT_DIR"  # Set group sticky bit so new files inherit group
+    # The logger container runs as uid/gid 1002, so it needs to own the directory
+    sudo chown 1002:1002 "$OUTPUT_DIR"
+    sudo chmod 750 "$OUTPUT_DIR"  # rwxr-x--- : owner (logger) can write, group can read/traverse
 else
     echo -e "${BLUE}📁 Output directory exists: $OUTPUT_DIR${NC}"
-    # Fix permissions if needed - secure but accessible
-    sudo chown yeldarb:1002 "$OUTPUT_DIR"
-    sudo chmod 750 "$OUTPUT_DIR"  # Need execute to traverse directory, but files won't have execute
-    sudo chmod g+s "$OUTPUT_DIR"
-    # Fix any existing files to be readable by group, NO EXECUTE
-    sudo find "$OUTPUT_DIR" -type f -exec chgrp 1002 {} \; 2>/dev/null || true
+    # Fix permissions - logger needs to own the directory to write
+    sudo chown 1002:1002 "$OUTPUT_DIR"
+    sudo chmod 750 "$OUTPUT_DIR"
+    # Fix any existing files
+    sudo find "$OUTPUT_DIR" -type f -exec chown 1002:1002 {} \; 2>/dev/null || true
     sudo find "$OUTPUT_DIR" -type f -exec chmod 640 {} \; 2>/dev/null || true
 fi
 
 # Add yeldarb to the logger group (gid 1002) if not already
-if ! groups yeldarb | grep -q 1002; then
+if ! id -nG yeldarb | grep -qw logger; then
     echo -e "${GREEN}Adding yeldarb user to logger group (gid 1002) for log access${NC}"
-    sudo usermod -a -G 1002 yeldarb || {
-        # If group doesn't exist, create it first
-        sudo groupadd -g 1002 logger 2>/dev/null || true
-        sudo usermod -a -G logger yeldarb
-    }
+    # Create the logger group if it doesn't exist
+    sudo groupadd -g 1002 logger 2>/dev/null || true
+    sudo usermod -a -G logger yeldarb
     echo -e "${YELLOW}Note: You may need to log out and back in for group membership to take effect${NC}"
+    echo -e "${YELLOW}Or run: newgrp logger${NC}"
 fi
 
 # Determine which docker compose command to use
@@ -254,9 +250,10 @@ echo -e "${YELLOW}Note: Containers will auto-restart if they crash or become unh
 echo ""
 echo -e "${GREEN}📋 Security & Permissions:${NC}"
 echo -e "   Logs directory: $(ls -ld $OUTPUT_DIR | awk '{print $1" "$3":"$4}')"
-echo -e "   Directory: 750 (traverse only, no file execution)"
+echo -e "   Directory: 750 (logger owns, group can read)"
 echo -e "   Log files: 640 (read-only, NO EXECUTE)"
-echo -e "   ${GREEN}✓${NC} No execute permissions on any logged malicious code"
-echo -e "   ${GREEN}✓${NC} Group-based access control (gid 1002)"
+echo -e "   ${GREEN}✓${NC} Logger container (uid 1002) owns directory for writing"
+echo -e "   ${GREEN}✓${NC} You're in logger group (gid 1002) for reading"
+echo -e "   ${GREEN}✓${NC} No execute permissions on logged malicious code"
 echo -e "   ${GREEN}✓${NC} No world access to potentially dangerous logs"
 echo ""
