@@ -136,15 +136,31 @@ OUTPUT_DIR="/home/yeldarb/output"
 if [ ! -d "$OUTPUT_DIR" ]; then
     echo -e "${GREEN}📁 Creating output directory: $OUTPUT_DIR${NC}"
     sudo mkdir -p "$OUTPUT_DIR"
-    # Set ownership to yeldarb user but allow logger container (uid 1002) to write
-    sudo chown yeldarb:yeldarb "$OUTPUT_DIR"
-    sudo chmod 777 "$OUTPUT_DIR"  # Allow everyone to write (for the logger container)
+    # Create a shared group for logger (gid 1002) and set proper permissions
+    # The logger container runs as uid/gid 1002
+    sudo chown yeldarb:1002 "$OUTPUT_DIR"
+    sudo chmod 770 "$OUTPUT_DIR"  # rwx for owner and group, nothing for others
+    sudo chmod g+s "$OUTPUT_DIR"  # Set group sticky bit so new files inherit group
 else
     echo -e "${BLUE}📁 Output directory exists: $OUTPUT_DIR${NC}"
-    # Fix permissions if needed - allow logger container to write
-    sudo chmod 777 "$OUTPUT_DIR"
-    # Also fix any existing files to be readable by yeldarb
-    sudo find "$OUTPUT_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
+    # Fix permissions if needed - secure but accessible
+    sudo chown yeldarb:1002 "$OUTPUT_DIR"
+    sudo chmod 770 "$OUTPUT_DIR"
+    sudo chmod g+s "$OUTPUT_DIR"
+    # Fix any existing files to be readable by group
+    sudo find "$OUTPUT_DIR" -type f -exec chgrp 1002 {} \; 2>/dev/null || true
+    sudo find "$OUTPUT_DIR" -type f -exec chmod 640 {} \; 2>/dev/null || true
+fi
+
+# Add yeldarb to the logger group (gid 1002) if not already
+if ! groups yeldarb | grep -q 1002; then
+    echo -e "${GREEN}Adding yeldarb user to logger group (gid 1002) for log access${NC}"
+    sudo usermod -a -G 1002 yeldarb || {
+        # If group doesn't exist, create it first
+        sudo groupadd -g 1002 logger 2>/dev/null || true
+        sudo usermod -a -G logger yeldarb
+    }
+    echo -e "${YELLOW}Note: You may need to log out and back in for group membership to take effect${NC}"
 fi
 
 # Determine which docker compose command to use
@@ -237,7 +253,8 @@ echo -e "${YELLOW}Note: Containers will auto-restart if they crash or become unh
 # Instructions for fixing permissions if needed
 echo ""
 echo -e "${GREEN}📋 Permissions info:${NC}"
-echo -e "   Logs directory permissions: $(ls -ld $OUTPUT_DIR | awk '{print $1}')"
-echo -e "   You can read all logs in: $OUTPUT_DIR"
-echo -e "   Logger container can write new logs"
+echo -e "   Logs directory: $(ls -ld $OUTPUT_DIR | awk '{print $1" "$3":"$4}')"
+echo -e "   Logger writes as gid 1002, you read as member of group 1002"
+echo -e "   Secure permissions: 770 on directory, 640 on files"
+echo -e "   No world access to potentially malicious code logs"
 echo ""
