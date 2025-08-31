@@ -160,8 +160,12 @@ else
 fi
 echo -e "${GREEN}✓ Using compose command: $COMPOSE_CMD${NC}"
 
-# Stop any existing containers
+# Stop any existing containers (both docker-compose and standalone)
 echo -e "${GREEN}🧹 Cleaning up existing containers...${NC}"
+# Stop and remove any standalone container from old script
+docker stop modal-ctf 2>/dev/null || true
+docker rm modal-ctf 2>/dev/null || true
+# Stop docker-compose services
 $COMPOSE_CMD down 2>/dev/null || true
 
 # Build and start services
