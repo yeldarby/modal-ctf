@@ -31,7 +31,6 @@ pip-delete-this-directory.txt
 # Project specific
 README.md
 deploy_modal.sh
-start_server.sh
 docker_start.sh
 docker-compose.yml
 Dockerfile.backup

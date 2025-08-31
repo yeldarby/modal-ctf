@@ -34,6 +34,4 @@ echo "✅ Modal function deployed successfully!"
 echo
 echo "Next steps:"
 echo "1. Set your FLAG: export FLAG='CTF{your_flag_here}'"
-echo "2. Start the server: ./start_server.sh (for local testing)"
-echo "   OR"
-echo "3. Use Docker: ./docker_start.sh (for production deployment)"
+echo "2. Start the server: ./docker_start.sh"

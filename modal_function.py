@@ -33,11 +33,14 @@ def run_untrusted_code(code: str) -> dict:
         if not code:
             result = None
         else:
+            # Create a namespace for execution
+            exec_namespace = {}
+            
             # Try to compile the entire code block first
             try:
                 # Try to compile as 'exec' mode (statements)
                 compiled = compile(code, '<string>', 'exec')
-                exec(compiled)
+                exec(compiled, exec_namespace)
                 
                 # If the last line looks like an expression, try to evaluate it
                 lines = code.split('\n')
@@ -46,15 +49,19 @@ def run_untrusted_code(code: str) -> dict:
                     if last_line and not any(last_line.startswith(kw) for kw in 
                         ['import ', 'from ', 'def ', 'class ', 'if ', 'for ', 'while ', 'with ', 'try:', 'except']):
                         try:
-                            # Try to evaluate the last line as an expression
-                            result = eval(last_line)
+                            # Try to evaluate the last line as an expression IN THE SAME NAMESPACE
+                            result = eval(last_line, exec_namespace)
                         except:
                             # Last line wasn't an expression, that's fine
-                            pass
+                            result = None
+                    else:
+                        result = None
+                else:
+                    result = None
             except SyntaxError:
                 # Maybe it's a single expression?
                 try:
-                    result = eval(code)
+                    result = eval(code, exec_namespace)
                 except:
                     # Re-raise the original error
                     raise
