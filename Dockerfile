@@ -35,6 +35,9 @@ ENV PYTHONPATH="/home/ctfuser/.local/lib/python3.11/site-packages:${PYTHONPATH:-
 # Set USER environment variable to match the actual user
 ENV USER=ctfuser
 
+# Mark as Docker container
+ENV DOCKER_CONTAINER=1
+
 # Switch to non-root user
 USER ctfuser
 

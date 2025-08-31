@@ -1,5 +1,6 @@
-modal
+rfmodal>=1.2.1
 fastapi
 pydantic
 uvicorn[standard]
 requests
+grpcio>=1.60.0

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Docker security best practices startup script for Modal CTF
-# This script starts the containerized application with maximum security restrictions
+# This script starts the containerized application with configurable security mode
 
 set -e
 
@@ -9,6 +9,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
@@ -16,6 +17,22 @@ CONTAINER_NAME="modal-ctf"
 IMAGE_NAME="modal-ctf:secure"
 HOST_PORT=80
 CONTAINER_PORT=8080
+
+# Parse command line arguments
+MODE="secure"  # Default to secure mode
+if [ "$1" = "vulnerable" ] || [ "$1" = "vuln" ]; then
+    MODE="vulnerable"
+    echo -e "${YELLOW}⚠️  Starting in VULNERABLE mode - pickle attacks will work!${NC}"
+elif [ "$1" = "secure" ] || [ -z "$1" ]; then
+    MODE="secure"
+    echo -e "${GREEN}🛡️  Starting in SECURE mode - pickle firewall enabled${NC}"
+else
+    echo -e "${RED}Error: Invalid mode '$1'${NC}"
+    echo "Usage: $0 [secure|vulnerable]"
+    echo "  secure (default): Enable rfmodal pickle firewall"
+    echo "  vulnerable: Disable firewall for CTF exploitation"
+    exit 1
+fi
 
 # Check if FLAG is set
 if [ -z "$FLAG" ]; then
@@ -70,12 +87,12 @@ fi
 # Check if running as root (needed for port 80)
 if [ "$HOST_PORT" -lt 1024 ] && [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: Port $HOST_PORT requires root privileges.${NC}"
-    echo "Run with: sudo FLAG='$FLAG' ./docker_start.sh"
+    echo "Run with: sudo FLAG='$FLAG' ./docker_start.sh $MODE"
     echo "Or change HOST_PORT to 8080 in this script"
     exit 1
 fi
 
-echo -e "${GREEN}🔨 Building secure Docker image...${NC}"
+echo -e "${GREEN}🔨 Building Docker image with rfmodal from PyPI...${NC}"
 
 # Build the Docker image
 docker build -t $IMAGE_NAME . || {
@@ -88,7 +105,21 @@ echo -e "${GREEN}🧹 Cleaning up existing containers...${NC}"
 docker stop $CONTAINER_NAME 2>/dev/null || true
 docker rm $CONTAINER_NAME 2>/dev/null || true
 
-echo -e "${GREEN}🚀 Starting secure container...${NC}"
+# Set VULNERABLE environment variable based on mode
+if [ "$MODE" = "vulnerable" ]; then
+    VULNERABLE_ENV="true"
+    MODE_COLOR=$YELLOW
+    MODE_EMOJI="⚠️"
+    MODE_DESC="VULNERABLE - Pickle attacks enabled"
+else
+    VULNERABLE_ENV="false"
+    MODE_COLOR=$GREEN
+    MODE_EMOJI="🛡️"
+    MODE_DESC="SECURE - Pickle firewall active"
+fi
+
+echo -e "${MODE_COLOR}🚀 Starting container in ${MODE} mode...${NC}"
+echo -e "${MODE_COLOR}   Mode: ${MODE_DESC}${NC}"
 echo -e "${GREEN}   FLAG: ${FLAG}${NC}"
 echo -e "${GREEN}   Host Port: ${HOST_PORT}${NC}"
 echo -e "${GREEN}   Container Port: ${CONTAINER_PORT}${NC}"
@@ -115,6 +146,7 @@ docker run \
     --restart always \
     --publish $HOST_PORT:$CONTAINER_PORT \
     --env FLAG="$FLAG" \
+    --env VULNERABLE="$VULNERABLE_ENV" \
     --env MODAL_TOKEN_ID="$MODAL_TOKEN_ID" \
     --env MODAL_TOKEN_SECRET="$MODAL_TOKEN_SECRET" \
     --read-only \
@@ -162,8 +194,21 @@ echo -e "${GREEN}📜 Container Logs:${NC}"
 docker logs --tail 20 $CONTAINER_NAME
 
 echo ""
-echo -e "${GREEN}✨ Modal CTF Challenge is running!${NC}"
+echo -e "${MODE_COLOR}✨ Modal CTF Challenge is running in ${MODE} mode!${NC}"
 echo -e "${GREEN}   Access at: http://localhost:${HOST_PORT}${NC}"
+echo ""
+
+if [ "$MODE" = "vulnerable" ]; then
+    echo -e "${YELLOW}${MODE_EMOJI} VULNERABLE MODE ACTIVE ${MODE_EMOJI}${NC}"
+    echo -e "${YELLOW}   Pickle deserialization attacks WILL work${NC}"
+    echo -e "${YELLOW}   This is for CTF demonstration purposes${NC}"
+else
+    echo -e "${GREEN}${MODE_EMOJI} SECURE MODE ACTIVE ${MODE_EMOJI}${NC}"
+    echo -e "${GREEN}   rfmodal's pickle firewall is enabled${NC}"
+    echo -e "${GREEN}   Standard pickle attacks are BLOCKED${NC}"
+    echo -e "${BLUE}   Challenge: Find another exploit (if one exists!)${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}Security features enabled:${NC}"
 echo "  ✓ Running as non-root user (uid=1001)"
@@ -181,8 +226,10 @@ echo "  ✓ Resource limits enforced (256MB RAM, 0.5 CPU)"
 echo "  ✓ Process and file descriptor limits"
 echo "  ✓ No setuid/setgid binaries in container"
 echo ""
-echo -e "${GREEN}To stop the container:${NC} docker stop $CONTAINER_NAME"
-echo -e "${GREEN}To view logs:${NC} docker logs -f $CONTAINER_NAME"
-echo -e "${GREEN}To restart:${NC} docker restart $CONTAINER_NAME"
+echo -e "${GREEN}Commands:${NC}"
+echo -e "  To stop:    docker stop $CONTAINER_NAME"
+echo -e "  To logs:    docker logs -f $CONTAINER_NAME"
+echo -e "  To restart: docker restart $CONTAINER_NAME"
+echo -e "  To switch:  ./docker_start.sh [secure|vulnerable]"
 echo ""
 echo -e "${YELLOW}Note: Container will auto-restart if it crashes or becomes unhealthy${NC}"

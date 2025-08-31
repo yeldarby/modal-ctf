@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 """
 Local FastAPI server that runs on the host VM and calls the Modal function.
-This server will be vulnerable to the pickle deserialization attack.
+Can run in two modes:
+- Secure mode (default): Uses rfmodal's pickle firewall to prevent RCE
+- Vulnerable mode: Disables firewall to allow pickle deserialization attacks
 """
 
 import os
 import json
-import modal
+import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from pathlib import Path
 import uvicorn
-import sys
+
+# Import rfmodal (our secure fork of modal)
+# Note: rfmodal package installs as 'modal' module
+try:
+    import modal
+except ImportError:
+    print("Error: rfmodal not found. Please install with: pip install rfmodal")
+    print("The Docker image should have rfmodal pre-installed")
+    sys.exit(1)
+
+# Check if running in vulnerable mode
+VULNERABLE_MODE = os.environ.get("VULNERABLE", "false").lower() in ["true", "1", "yes"]
 
 # Set the FLAG environment variable for the CTF
 if "FLAG" not in os.environ:
@@ -20,7 +33,10 @@ if "FLAG" not in os.environ:
     os.environ["FLAG"] = "CTF{default_flag_for_testing}"
 
 # Create FastAPI app
-app = FastAPI(title="Modal CTF Challenge")
+app = FastAPI(
+    title="Modal CTF Challenge",
+    description=f"Running in {'VULNERABLE' if VULNERABLE_MODE else 'SECURE'} mode"
+)
 
 # Serve static files from public directory
 @app.get("/", response_class=HTMLResponse)
@@ -38,6 +54,33 @@ async def root():
             # Running directly
             base_url = f"http://localhost:{port}" if port != "80" else "http://localhost"
         content = content.replace("[YOUR_URL]", base_url)
+        
+        # Add mode indicator to the HTML
+        mode_indicator = """
+        <div class="mode-indicator" style="background: {}; color: white; padding: 10px; text-align: center; font-weight: bold; margin-bottom: 20px;">
+            🔒 Server is running in {} MODE {} 🔒
+        </div>
+        """.format(
+            "#d9534f" if VULNERABLE_MODE else "#5cb85c",
+            "VULNERABLE" if VULNERABLE_MODE else "SECURE",
+            "- Pickle attacks WILL work!" if VULNERABLE_MODE else "- Pickle attacks are BLOCKED!"
+        )
+        
+        # Insert mode indicator after <body> tag
+        content = content.replace("<body>", f"<body>\n    {mode_indicator}")
+        
+        # Update the description based on mode
+        if not VULNERABLE_MODE:
+            secure_note = """
+        <div class="section" style="background: #d4edda; border: 2px solid #c3e6cb; padding: 15px; border-radius: 5px;">
+            <h3>🛡️ Secure Mode Active</h3>
+            <p>The server is running with rfmodal's pickle firewall enabled. The standard pickle deserialization attacks shown below will NOT work.</p>
+            <p><strong>Your challenge:</strong> Find another way to exploit the system! (Hint: There might not be one... that's the real challenge!)</p>
+        </div>
+        """
+            content = content.replace('<h1>🚩 Modal CTF Challenge - Capture the Flag! 🚩</h1>', 
+                                    f'<h1>🚩 Modal CTF Challenge - Capture the Flag! 🚩</h1>\n    {secure_note}')
+        
         return content
     return "<h1>Error: public/index.html not found</h1>"
 
@@ -48,29 +91,33 @@ async def execute_code(request: Request):
     
     Accepts raw Python code as the request body (no JSON wrapper).
     
-    VULNERABILITY: The result from Modal is unpickled, allowing arbitrary code
-    execution if the returned object has a malicious __reduce__ method.
+    Security modes:
+    - SECURE (default): Uses rfmodal's pickle firewall to block malicious deserialization
+    - VULNERABLE: Disables firewall, allowing pickle RCE attacks for CTF purposes
     """
     try:
         # Get raw body as Python code
         code = await request.body()
         code = code.decode('utf-8')
         
-        # Get the Modal function
+        # Get the Modal function with appropriate firewall setting
         modal_function = modal.Function.from_name(
             "modal-ctf-challenge", 
-            "run_untrusted_code"
+            "run_untrusted_code",
+            use_firewall=not VULNERABLE_MODE  # Enable firewall unless in vulnerable mode
         )
         
         # Call the Modal function remotely
-        # The vulnerability happens here when Modal pickles/unpickles the result
+        # In secure mode, rfmodal's firewall will block malicious pickle operations
+        # In vulnerable mode, the attack will work as before
         result = modal_function.remote(code)
         
         response_data = {
             "success": True,
             "result": result.get("result"),
             "output": result.get("output"),
-            "error": result.get("error")
+            "error": result.get("error"),
+            "mode": "vulnerable" if VULNERABLE_MODE else "secure"
         }
         
         # Return pretty-printed JSON
@@ -78,11 +125,21 @@ async def execute_code(request: Request):
         return Response(content=pretty_json, media_type="application/json")
         
     except Exception as e:
+        # Check if this is a firewall-blocked pickle operation
+        error_message = str(e)
+        is_firewall_block = "rffickle" in error_message.lower() or "firewall" in error_message.lower()
+        
         response_data = {
             "success": False,
-            "error": f"Failed to execute code: {str(e)}",
-            "details": str(type(e).__name__)
+            "error": f"Failed to execute code: {error_message}",
+            "details": str(type(e).__name__),
+            "mode": "vulnerable" if VULNERABLE_MODE else "secure",
+            "firewall_blocked": is_firewall_block and not VULNERABLE_MODE
         }
+        
+        if is_firewall_block and not VULNERABLE_MODE:
+            response_data["hint"] = "The pickle firewall blocked your attack. This is expected in secure mode!"
+        
         pretty_json = json.dumps(response_data, indent=2)
         return Response(content=pretty_json, media_type="application/json", status_code=500)
 
@@ -91,10 +148,22 @@ async def health():
     """Health check endpoint."""
     return {
         "status": "healthy",
+        "mode": "vulnerable" if VULNERABLE_MODE else "secure",
+        "firewall_enabled": not VULNERABLE_MODE,
         "flag_configured": "FLAG" in os.environ,
         "modal_configured": bool(os.environ.get("MODAL_TOKEN_ID")),
         "container": os.path.exists("/.dockerenv") or bool(os.environ.get("DOCKER_CONTAINER")),
-        "hostname": os.uname().nodename
+        "hostname": os.uname().nodename,
+        "rfmodal_version": getattr(modal, "__version__", "unknown")
+    }
+
+@app.get("/mode")
+async def mode():
+    """Get current security mode."""
+    return {
+        "mode": "vulnerable" if VULNERABLE_MODE else "secure",
+        "firewall_enabled": not VULNERABLE_MODE,
+        "description": "Pickle attacks WILL work" if VULNERABLE_MODE else "Pickle attacks are BLOCKED"
     }
 
 if __name__ == "__main__":
@@ -106,11 +175,23 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Modal CTF Challenge - Local Server")
     print("=" * 60)
+    print(f"MODE: {'VULNERABLE' if VULNERABLE_MODE else 'SECURE'}")
+    print(f"Pickle Firewall: {'DISABLED ⚠️' if VULNERABLE_MODE else 'ENABLED ✅'}")
     print(f"FLAG is set to: {os.environ.get('FLAG', 'NOT SET')}")
     print(f"Running as user: {os.environ.get('USER', 'unknown')}")
     print(f"Hostname: {os.uname().nodename}")
     print(f"Container: {'Yes (Docker)' if in_docker else 'No (Direct)'}")
     print(f"Python version: {sys.version}")
+    print()
+    
+    if VULNERABLE_MODE:
+        print("⚠️  WARNING: Running in VULNERABLE mode!")
+        print("   Pickle deserialization attacks WILL work!")
+    else:
+        print("🛡️  Running in SECURE mode")
+        print("   rfmodal's pickle firewall is active")
+        print("   Standard pickle attacks will be blocked")
+    
     print()
     print(f"Starting server on http://0.0.0.0:{port}")
     print("=" * 60)
