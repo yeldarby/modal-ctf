@@ -146,16 +146,30 @@ else
     sudo chmod -R 755 "$OUTPUT_DIR"
 fi
 
+# Determine which docker compose command to use
+if command -v docker-compose &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+else
+    echo -e "${RED}Error: Docker Compose is not installed!${NC}"
+    echo "Install with one of:"
+    echo "  - sudo apt-get install docker-compose"
+    echo "  - Or use Docker's built-in compose (should be included with Docker)"
+    exit 1
+fi
+echo -e "${GREEN}✓ Using compose command: $COMPOSE_CMD${NC}"
+
 # Stop any existing containers
 echo -e "${GREEN}🧹 Cleaning up existing containers...${NC}"
-docker-compose down 2>/dev/null || true
+$COMPOSE_CMD down 2>/dev/null || true
 
 # Build and start services
 echo -e "${GREEN}🚀 Building and starting services...${NC}"
-docker-compose up -d --build || {
+$COMPOSE_CMD up -d --build || {
     echo -e "${RED}Failed to start services with docker-compose${NC}"
     echo -e "${RED}Error details:${NC}"
-    docker-compose logs --tail=20
+    $COMPOSE_CMD logs --tail=20
     exit 1
 }
 
@@ -165,11 +179,11 @@ sleep 3
 
 # Show container status
 echo -e "${GREEN}📊 Container Status:${NC}"
-docker-compose ps
+$COMPOSE_CMD ps
 
 # Show main service logs
 echo -e "${GREEN}📜 Service Logs:${NC}"
-docker-compose logs --tail=10
+$COMPOSE_CMD logs --tail=10
 
 echo ""
 echo -e "${MODE_COLOR}✨ Modal CTF Challenge is running in ${MODE} mode!${NC}"
@@ -203,11 +217,11 @@ echo "  ✓ Process and file descriptor limits"
 echo "  ✓ No setuid/setgid binaries in container"
 echo ""
 echo -e "${GREEN}Commands:${NC}"
-echo -e "  To stop:     docker-compose down"
-echo -e "  To logs:     docker-compose logs -f"
-echo -e "  To app logs: docker-compose logs -f modal-ctf"
-echo -e "  To logger:   docker-compose logs -f logger"
-echo -e "  To restart:  docker-compose restart"
+echo -e "  To stop:     $COMPOSE_CMD down"
+echo -e "  To logs:     $COMPOSE_CMD logs -f"
+echo -e "  To app logs: $COMPOSE_CMD logs -f modal-ctf"
+echo -e "  To logger:   $COMPOSE_CMD logs -f logger"
+echo -e "  To restart:  $COMPOSE_CMD restart"
 echo "  To switch:   ./docker_start_compose.sh [secure|vulnerable]"
 echo ""
 echo -e "${BLUE}📝 Logs are being written to: $OUTPUT_DIR${NC}"
