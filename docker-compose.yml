@@ -39,6 +39,7 @@ services:
       - FLAG=${FLAG:-CTF{default_flag_for_testing}}
       - MODAL_TOKEN_ID=${MODAL_TOKEN_ID}
       - MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET}
+      - BASE_URL=${BASE_URL}
       - PORT=8080
       - LOGGER_URL=http://logger:9090
       - LOGGER_SECRET=${LOGGER_SECRET:-change-me-in-production}
