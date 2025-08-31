@@ -57,6 +57,14 @@ def verify_hmac(data: dict, signature: str) -> bool:
         message.encode(),
         hashlib.sha256
     ).hexdigest()
+    
+    # Debug logging
+    if signature != expected_signature:
+        print(f"HMAC mismatch:", file=sys.stderr)
+        print(f"  Received: {signature[:16]}...", file=sys.stderr)
+        print(f"  Expected: {expected_signature[:16]}...", file=sys.stderr)
+        print(f"  Secret used: {LOGGER_SECRET[:8]}...", file=sys.stderr)
+    
     return hmac.compare_digest(signature, expected_signature)
 
 @app.post("/log")
@@ -65,8 +73,9 @@ async def log_entry(entry: LogEntry):
     Write-only endpoint to log CTF attempts.
     No read capability to prevent information disclosure if compromised.
     """
-    # Verify HMAC signature
-    if not verify_hmac(entry.dict(), entry.hmac_signature):
+    # Verify HMAC signature (use model_dump instead of deprecated dict)
+    if not verify_hmac(entry.model_dump(), entry.hmac_signature):
+        print(f"HMAC verification failed for request from {entry.client_ip}", file=sys.stderr)
         raise HTTPException(status_code=403, detail="Invalid signature")
     
     # Generate timestamp
@@ -101,10 +110,14 @@ async def log_entry(entry: LogEntry):
         output_file.write_text(json.dumps(entry.output, indent=2))
         output_file.chmod(0o600)
         
+        print(f"Successfully logged entry at {timestamp} from {entry.client_ip}", file=sys.stderr)
         return {"status": "logged", "timestamp": timestamp}
         
     except Exception as e:
-        # Don't reveal internal errors
+        # Log the actual error for debugging
+        print(f"Logging error: {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Logging failed")
 
 @app.get("/health")
