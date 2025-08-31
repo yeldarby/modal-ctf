@@ -173,14 +173,14 @@ echo -e "${GREEN}Starting Docker container...${NC}"
 echo -e "${BLUE}Security options: ${SECURITY_OPTS}${NC}"
 
 # Build environment variables for docker run
-ENV_OPTS="--env FLAG=\"$FLAG\" \
-    --env VULNERABLE=\"$VULNERABLE_ENV\" \
-    --env MODAL_TOKEN_ID=\"$MODAL_TOKEN_ID\" \
-    --env MODAL_TOKEN_SECRET=\"$MODAL_TOKEN_SECRET\""
+ENV_OPTS="--env FLAG=$FLAG \
+    --env VULNERABLE=$VULNERABLE_ENV \
+    --env MODAL_TOKEN_ID=$MODAL_TOKEN_ID \
+    --env MODAL_TOKEN_SECRET=$MODAL_TOKEN_SECRET"
 
 # Add BASE_URL if set
 if [ -n "$BASE_URL" ]; then
-    ENV_OPTS="$ENV_OPTS --env BASE_URL=\"$BASE_URL\""
+    ENV_OPTS="$ENV_OPTS --env BASE_URL=$BASE_URL"
 fi
 
 docker run \

@@ -14,9 +14,23 @@ import uvicorn
 import hashlib
 import hmac
 
+def strip_quotes(value: str) -> str:
+    """Strip surrounding quotes from environment variable values if present."""
+    if value and len(value) >= 2:
+        if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
+            return value[1:-1]
+    return value
+
+def get_env(key: str, default: str = None) -> str:
+    """Get environment variable and strip any surrounding quotes."""
+    value = os.environ.get(key, default)
+    if value is not None:
+        return strip_quotes(value)
+    return value
+
 # Generate a random secret key for HMAC authentication
 # In production, this should be set via environment variable shared only with main container
-LOGGER_SECRET = os.environ.get("LOGGER_SECRET", "default-secret-change-me")
+LOGGER_SECRET = get_env("LOGGER_SECRET", "default-secret-change-me")
 
 app = FastAPI(
     title="CTF Logger Service",

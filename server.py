@@ -17,6 +17,26 @@ from fastapi.responses import HTMLResponse
 from pathlib import Path
 import uvicorn
 
+def strip_quotes(value: str) -> str:
+    """Strip surrounding quotes from environment variable values if present."""
+    if value and len(value) >= 2:
+        if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
+            return value[1:-1]
+    return value
+
+def get_env(key: str, default: str = None) -> str:
+    """Get environment variable and strip any surrounding quotes."""
+    value = os.environ.get(key, default)
+    if value is not None:
+        return strip_quotes(value)
+    return value
+
+# Clean up Modal tokens if they have quotes
+if "MODAL_TOKEN_ID" in os.environ:
+    os.environ["MODAL_TOKEN_ID"] = strip_quotes(os.environ["MODAL_TOKEN_ID"])
+if "MODAL_TOKEN_SECRET" in os.environ:
+    os.environ["MODAL_TOKEN_SECRET"] = strip_quotes(os.environ["MODAL_TOKEN_SECRET"])
+
 # Import rfmodal (our secure fork of modal)
 # Note: rfmodal package installs as 'modal' module
 try:
@@ -27,17 +47,22 @@ except ImportError:
     sys.exit(1)
 
 # Check if running in vulnerable mode
-VULNERABLE_MODE = os.environ.get("VULNERABLE", "false").lower() in ["true", "1", "yes"]
+VULNERABLE_MODE = get_env("VULNERABLE", "false").lower() in ["true", "1", "yes"]
 
 # Logger configuration
-LOGGER_URL = os.environ.get("LOGGER_URL")
-LOGGER_SECRET = os.environ.get("LOGGER_SECRET", "default-secret-change-me")
+LOGGER_URL = get_env("LOGGER_URL")
+LOGGER_SECRET = get_env("LOGGER_SECRET", "default-secret-change-me")
 
 # Set the FLAG environment variable for the CTF
-if "FLAG" not in os.environ:
+FLAG = get_env("FLAG")
+if not FLAG:
     print("⚠️  WARNING: FLAG environment variable not set!")
     print("   Set it with: export FLAG='CTF{your_flag_here}'")
-    os.environ["FLAG"] = "CTF{default_flag_for_testing}"
+    FLAG = "CTF{default_flag_for_testing}"
+    os.environ["FLAG"] = FLAG
+else:
+    # Update the environment variable with the cleaned value
+    os.environ["FLAG"] = FLAG
 
 # Create FastAPI app
 app = FastAPI(
@@ -89,12 +114,12 @@ async def root():
         content = html_path.read_text()
         
         # Determine the base URL
-        base_url = os.environ.get("BASE_URL")
+        base_url = get_env("BASE_URL")
         if not base_url:
             # Auto-detect based on environment
-            port = os.environ.get("PORT", "80")
+            port = get_env("PORT", "80")
             # In Docker, we're always on the internal port, external mapping handles the rest
-            if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER"):
+            if os.path.exists("/.dockerenv") or get_env("DOCKER_CONTAINER"):
                 # Running in Docker
                 base_url = "http://localhost"
             else:
@@ -200,9 +225,9 @@ async def health():
         "status": "healthy",
         "mode": "vulnerable" if VULNERABLE_MODE else "secure",
         "firewall_enabled": not VULNERABLE_MODE,
-        "flag_configured": "FLAG" in os.environ,
-        "modal_configured": bool(os.environ.get("MODAL_TOKEN_ID")),
-        "container": os.path.exists("/.dockerenv") or bool(os.environ.get("DOCKER_CONTAINER")),
+        "flag_configured": bool(FLAG),
+        "modal_configured": bool(get_env("MODAL_TOKEN_ID")),
+        "container": os.path.exists("/.dockerenv") or bool(get_env("DOCKER_CONTAINER")),
         "hostname": os.uname().nodename,
         "rfmodal_version": getattr(modal, "__version__", "unknown"),
         "logger_configured": bool(LOGGER_URL)
@@ -218,19 +243,19 @@ async def mode():
     }
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "80"))
-    base_url = os.environ.get("BASE_URL")
+    port = int(get_env("PORT", "80"))
+    base_url = get_env("BASE_URL")
     
     # Detect if running in Docker
-    in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
+    in_docker = os.path.exists("/.dockerenv") or get_env("DOCKER_CONTAINER")
     
     print("=" * 60)
     print("Modal CTF Challenge - Local Server")
     print("=" * 60)
     print(f"MODE: {'VULNERABLE' if VULNERABLE_MODE else 'SECURE'}")
     print(f"Pickle Firewall: {'DISABLED ⚠️' if VULNERABLE_MODE else 'ENABLED ✅'}")
-    print(f"FLAG is set to: {os.environ.get('FLAG', 'NOT SET')}")
-    print(f"Running as user: {os.environ.get('USER', 'unknown')}")
+    print(f"FLAG is set to: {FLAG}")
+    print(f"Running as user: {get_env('USER', 'unknown')}")
     print(f"Hostname: {os.uname().nodename}")
     print(f"Container: {'Yes (Docker)' if in_docker else 'No (Direct)'}")
     print(f"Python version: {sys.version}")
