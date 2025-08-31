@@ -73,6 +73,7 @@ app = FastAPI(
 async def log_to_sidecar(code: str, output: dict, client_ip: str, user_agent: str):
     """Send log entry to the logger sidecar service"""
     if not LOGGER_URL:
+        print(f"Logger not configured - LOGGER_URL is empty", file=sys.stderr)
         return  # Logger not configured
     
     try:
@@ -95,16 +96,24 @@ async def log_to_sidecar(code: str, output: dict, client_ip: str, user_agent: st
         # Add signature to data
         log_data["hmac_signature"] = signature
         
+        print(f"Sending log to {LOGGER_URL}/log with signature {signature[:8]}...", file=sys.stderr)
+        
         # Send to logger service
         async with httpx.AsyncClient() as client:
-            await client.post(
+            response = await client.post(
                 f"{LOGGER_URL}/log",
                 json=log_data,
-                timeout=2.0  # Short timeout to not block main service
+                timeout=5.0  # Increased timeout
             )
+            if response.status_code != 200:
+                print(f"Logger returned status {response.status_code}: {response.text}", file=sys.stderr)
+            else:
+                print(f"Successfully logged to sidecar", file=sys.stderr)
     except Exception as e:
-        # Silently fail - logging should not break main service
-        print(f"Logger error (non-critical): {e}", file=sys.stderr)
+        # Log the actual error for debugging
+        print(f"Logger error (non-critical): {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
 
 # Serve static files from public directory
 @app.get("/", response_class=HTMLResponse)
@@ -260,6 +269,8 @@ if __name__ == "__main__":
     print(f"Container: {'Yes (Docker)' if in_docker else 'No (Direct)'}")
     print(f"Python version: {sys.version}")
     print(f"Logger: {'Configured' if LOGGER_URL else 'Not configured'}")
+    print(f"Logger URL: {LOGGER_URL if LOGGER_URL else 'Not set'}")
+    print(f"Logger Secret: {LOGGER_SECRET[:8]}..." if LOGGER_SECRET else "Not set")
     if base_url:
         print(f"Base URL: {base_url}")
     print()
