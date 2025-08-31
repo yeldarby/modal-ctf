@@ -55,27 +55,13 @@ async def root():
             base_url = f"http://localhost:{port}" if port != "80" else "http://localhost"
         content = content.replace("[YOUR_URL]", base_url)
         
-        # Add mode indicator to the HTML
-        mode_indicator = """
-        <div class="mode-indicator" style="background: {}; color: white; padding: 10px; text-align: center; font-weight: bold; margin-bottom: 20px;">
-            🔒 Server is running in {} MODE {} 🔒
-        </div>
-        """.format(
-            "#d9534f" if VULNERABLE_MODE else "#5cb85c",
-            "VULNERABLE" if VULNERABLE_MODE else "SECURE",
-            "- Pickle attacks WILL work!" if VULNERABLE_MODE else "- Pickle attacks are BLOCKED!"
-        )
-        
-        # Insert mode indicator after <body> tag
-        content = content.replace("<body>", f"<body>\n    {mode_indicator}")
-        
         # Update the description based on mode
         if not VULNERABLE_MODE:
             secure_note = """
         <div class="section" style="background: #d4edda; border: 2px solid #c3e6cb; padding: 15px; border-radius: 5px;">
             <h3>🛡️ Secure Mode Active</h3>
-            <p>The server is running with rfmodal's pickle firewall enabled. The standard pickle deserialization attacks shown below will NOT work.</p>
-            <p><strong>Your challenge:</strong> Find another way to exploit the system! (Hint: There might not be one... that's the real challenge!)</p>
+            <p>The server is running with rfmodal's pickle firewall enabled. The standard pickle deserialization attacks shown below should NOT work.</p>
+            <p><strong>Your challenge:</strong> Find another way to exploit the system and capture the flag!</p>
         </div>
         """
             content = content.replace('<h1>🚩 Modal CTF Challenge - Capture the Flag! 🚩</h1>', 

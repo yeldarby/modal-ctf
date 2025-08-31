@@ -1,4 +1,4 @@
-rfmodal>=1.2.2
+rfmodal>=1.2.4
 fastapi
 pydantic
 uvicorn[standard]
