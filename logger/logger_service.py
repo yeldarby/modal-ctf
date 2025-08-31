@@ -5,6 +5,7 @@ No read or modify capabilities to prevent exploitation if main container is comp
 """
 
 import os
+import sys
 import json
 from datetime import datetime
 from pathlib import Path

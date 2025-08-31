@@ -136,14 +136,15 @@ OUTPUT_DIR="/home/yeldarb/output"
 if [ ! -d "$OUTPUT_DIR" ]; then
     echo -e "${GREEN}📁 Creating output directory: $OUTPUT_DIR${NC}"
     sudo mkdir -p "$OUTPUT_DIR"
-    # Set ownership to yeldarb user
+    # Set ownership to yeldarb user but allow logger container (uid 1002) to write
     sudo chown yeldarb:yeldarb "$OUTPUT_DIR"
-    sudo chmod 755 "$OUTPUT_DIR"
+    sudo chmod 777 "$OUTPUT_DIR"  # Allow everyone to write (for the logger container)
 else
     echo -e "${BLUE}📁 Output directory exists: $OUTPUT_DIR${NC}"
-    # Fix permissions if needed
-    sudo chown -R yeldarb:yeldarb "$OUTPUT_DIR"
-    sudo chmod -R 755 "$OUTPUT_DIR"
+    # Fix permissions if needed - allow logger container to write
+    sudo chmod 777 "$OUTPUT_DIR"
+    # Also fix any existing files to be readable by yeldarb
+    sudo find "$OUTPUT_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
 fi
 
 # Determine which docker compose command to use
@@ -236,6 +237,7 @@ echo -e "${YELLOW}Note: Containers will auto-restart if they crash or become unh
 # Instructions for fixing permissions if needed
 echo ""
 echo -e "${GREEN}📋 Permissions info:${NC}"
-echo -e "   Logs directory is owned by: $(ls -ld $OUTPUT_DIR | awk '{print $3":"$4}')"
-echo -e "   You should be able to read logs without sudo now"
+echo -e "   Logs directory permissions: $(ls -ld $OUTPUT_DIR | awk '{print $1}')"
+echo -e "   You can read all logs in: $OUTPUT_DIR"
+echo -e "   Logger container can write new logs"
 echo ""
